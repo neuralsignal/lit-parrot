@@ -514,6 +514,8 @@ def model_name_to_prompt_style(model_name: str) -> PromptStyle:
         return SmolLM2()
     if re.search(r"salamandra-.*-instruct", model_name):
         return Salamandra()
+    if re.search(r"Apertus-.*-Instruct", model_name):
+        return Llama3()
     return Default()
 
 

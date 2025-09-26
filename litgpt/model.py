@@ -19,6 +19,20 @@ from litgpt.config import Config
 from litgpt.scripts.convert_hf_checkpoint import qkv_reassemble
 
 
+def is_torchdynamo_compiling() -> Union[tuple[bool, str], bool]:
+    # Importing torch._dynamo causes issues with PyTorch profiler (https://github.com/pytorch/pytorch/issues/130622)
+    # hence rather relying on `torch.compiler.is_compiling()` when possible (torch>=2.3)
+    try:
+        return torch.compiler.is_compiling()
+    except Exception:
+        try:
+            import torch._dynamo as dynamo  # noqa: F401
+
+            return dynamo.is_compiling()
+        except Exception:
+            return False
+
+
 class GPT(nn.Module):
     def __init__(self, config: Config) -> None:
         super().__init__()
@@ -728,6 +742,120 @@ class GemmaMLP(LLaMAMLP):
         x_fc_1 = self.fc_1(x)
         x_fc_2 = self.fc_2(x)
         x = F.gelu(x_fc_1, approximate=self.config.gelu_approximate) * x_fc_2
+        return self.proj(x)
+
+
+class XIELUActivation(nn.Module):
+    """
+    Applies the xIELU activation function introduced in https://arxiv.org/abs/2411.13010
+
+    If the user has installed the nickjbrowning/XIELU wheel, we import xIELU CUDA
+    Otherwise, we emit a single warning and use xIELU Python
+    """
+
+    def __init__(
+        self,
+        alpha_p_init=0.8,
+        alpha_n_init=0.8,
+        beta=0.5,
+        eps=-1e-6,
+        dtype=torch.bfloat16,
+        with_vector_loads=False,
+    ):
+        super().__init__()
+        self.alpha_p = nn.Parameter(torch.log(torch.exp(torch.tensor(alpha_p_init, dtype=dtype)) - 1).unsqueeze(0))
+        self.alpha_n = nn.Parameter(
+            torch.log(torch.exp(torch.tensor(alpha_n_init - beta, dtype=dtype)) - 1).unsqueeze(0)
+        )
+        self.register_buffer("beta", torch.tensor(beta, dtype=dtype))
+        self.register_buffer("eps", torch.tensor(eps, dtype=dtype))
+        self.with_vector_loads = with_vector_loads
+        # Temporary until xIELU CUDA fully implemented
+        self._beta_scalar = float(self.beta.detach().cpu().float().item())
+        self._eps_scalar = float(self.eps.detach().cpu().float().item())
+
+        self._xielu_cuda_obj = None
+        try:
+            import xielu.ops  # noqa: F401
+
+            self._xielu_cuda_obj = torch.classes.xielu.XIELU()
+            msg = "Using experimental xIELU CUDA."
+            try:
+                from torch._dynamo import allow_in_graph
+
+                self._xielu_cuda_fn = allow_in_graph(self._xielu_cuda)
+                msg += " Enabled torch._dynamo for xIELU CUDA."
+            except Exception as err:
+                msg += f" Could not enable torch._dynamo for xIELU ({err}) - this may result in slower performance."
+                self._xielu_cuda_fn = self._xielu_cuda
+            # logger.warning_once(msg)
+        except Exception as err:
+            pass
+            # logger.warning_once(
+            #     "CUDA-fused xIELU not available (%s) – falling back to a Python version.\n"
+            #     "For CUDA xIELU (experimental), `pip install git+https://github.com/nickjbrowning/XIELU`",
+            #     str(err),
+            # )
+
+    def _xielu_python(self, x: torch.Tensor) -> torch.Tensor:
+        alpha_p = nn.functional.softplus(self.alpha_p)
+        alpha_n = self.beta + nn.functional.softplus(self.alpha_n)
+        return torch.where(
+            x > 0,
+            alpha_p * x * x + self.beta * x,
+            (torch.expm1(torch.min(x, self.eps)) - x) * alpha_n + self.beta * x,
+        )
+
+    def _xielu_cuda(self, x: torch.Tensor) -> torch.Tensor:
+        """Firewall function to prevent torch.compile from seeing .item() calls"""
+        original_shape = x.shape
+        # CUDA kernel expects 3D tensors, reshape if needed
+        while x.dim() < 3:
+            x = x.unsqueeze(0)
+        if x.dim() > 3:
+            x = x.view(-1, 1, x.size(-1))
+        if original_shape != x.shape:
+            pass
+            # logger.warning_once(
+            #     "Warning: xIELU input tensor expects 3 dimensions but got (shape: %s). Reshaping to (shape: %s).",
+            #     original_shape,
+            #     x.shape,
+            # )
+        result = self._xielu_cuda_obj.forward(
+            x,
+            self.alpha_p,
+            self.alpha_n,
+            # Temporary until xIELU CUDA fully implemented -> self.{beta,eps}.item()
+            self._beta_scalar,
+            self._eps_scalar,
+            self.with_vector_loads,
+        )
+        return result.view(original_shape)
+
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
+        if self._xielu_cuda_obj is not None and input.is_cuda:
+            if not is_torchdynamo_compiling():
+                return self._xielu_cuda_fn(input)
+            else:
+                pass
+                # logger.warning_once("torch._dynamo is compiling, using Python version of xIELU.")
+        return self._xielu_python(input)
+
+
+class ApertusMLP(nn.Module):
+    def __init__(self, config: Config, intermediate_size: Optional[int] = None) -> None:
+        super().__init__()
+        self.intermediate_size = intermediate_size or config.intermediate_size
+        self.fc_1 = nn.Linear(config.n_embd, self.intermediate_size, bias=config.bias)
+        self.fc_2 = nn.Linear(config.n_embd, self.intermediate_size, bias=config.bias)
+        self.proj = nn.Linear(self.intermediate_size, config.n_embd, bias=config.bias)
+        self.xielu = XIELUActivation()  # Trainable xIELU activation
+        self.config = config
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x_fc_1 = self.fc_1(x)
+        x_fc_2 = self.fc_2(x)
+        x = self.xielu(x_fc_1) * x_fc_2
         return self.proj(x)
 
 

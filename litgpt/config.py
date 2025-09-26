@@ -83,7 +83,7 @@ class Config:
     intermediate_size: Optional[int] = None
     moe_intermediate_size: Optional[int] = None
     bias: bool = True
-    mlp_class_name: Literal["GptNeoxMLP", "LLaMAMLP", "GemmaMLP", "LLaMAMoE"] = "GptNeoxMLP"
+    mlp_class_name: Literal["GptNeoxMLP", "LLaMAMLP", "GemmaMLP", "LLaMAMoE", "ApertusMLP"] = "GptNeoxMLP"
     gelu_approximate: str = "none"
     n_expert: int = 0
     n_expert_per_token: int = 0
@@ -122,7 +122,7 @@ class Config:
 
         # compute the intermediate size for MLP if not set
         if self.intermediate_size is None:
-            if self.mlp_class_name == "LLaMAMLP":
+            if self.mlp_class_name in ("LLaMAMLP", "ApertusMLP"):
                 raise ValueError(f"The config {self.name!r}, needs to set the `intermediate_size`")
             self.intermediate_size = 4 * self.n_embd
 
@@ -3133,5 +3133,128 @@ r1_distill_llama = [
 ]
 
 configs.extend(r1_distill_llama)
+
+####################
+# Swiss AI Apertus
+####################
+apertus = [
+    # https://huggingface.co/swiss-ai/Apertus-8B-2509/blob/main/config.json
+    dict(
+        name="Apertus-8B-2509",
+        hf_config=dict(org="swiss-ai", name="Apertus-8B-2509"),
+        block_size=65536,
+        vocab_size=131072,
+        padded_vocab_size=131072,
+        n_layer=32,
+        n_head=32,
+        n_embd=4096,
+        n_query_groups=8,
+        rotary_percentage=1.0,
+        parallel_residual=False,
+        bias=False,
+        norm_class_name="RMSNorm",
+        mlp_class_name="ApertusMLP",
+        intermediate_size=21504,
+        norm_eps=1e-5,
+        rope_base=12000000,
+        norm_qk=True,
+        rope_adjustments=dict(
+            factor=8.0,
+            high_freq_factor=4.0,
+            low_freq_factor=1.0,
+            original_max_position_embeddings=8192,
+            rope_type="llama3",
+            type="llama3"
+        ),
+    ),
+    # https://huggingface.co/swiss-ai/Apertus-8B-Instruct-2509/blob/main/config.json
+    dict(
+        name="Apertus-8B-Instruct-2509",
+        hf_config=dict(org="swiss-ai", name="Apertus-8B-Instruct-2509"),
+        block_size=65536,
+        vocab_size=131072,
+        padded_vocab_size=131072,
+        n_layer=32,
+        n_head=32,
+        n_embd=4096,
+        n_query_groups=8,
+        rotary_percentage=1.0,
+        parallel_residual=False,
+        bias=False,
+        norm_class_name="RMSNorm",
+        mlp_class_name="ApertusMLP",
+        intermediate_size=21504,
+        norm_eps=1e-5,
+        rope_base=12000000,
+        norm_qk=True,
+        rope_adjustments=dict(
+            factor=8.0,
+            high_freq_factor=4.0,
+            low_freq_factor=1.0,
+            original_max_position_embeddings=8192,
+            rope_type="llama3",
+            type="llama3"
+        ),
+    ),
+    # https://huggingface.co/swiss-ai/Apertus-70B-2509/blob/main/config.json
+    dict(
+        name="Apertus-70B-2509",
+        hf_config=dict(org="swiss-ai", name="Apertus-70B-2509"),
+        block_size=65536,
+        vocab_size=131072,
+        padded_vocab_size=131072,
+        n_layer=80,
+        n_head=64,
+        n_embd=8192,
+        n_query_groups=8,
+        rotary_percentage=1.0,
+        parallel_residual=False,
+        bias=False,
+        norm_class_name="RMSNorm",
+        mlp_class_name="ApertusMLP",
+        intermediate_size=43008,
+        norm_eps=1e-5,
+        rope_base=12000000,
+        norm_qk=True,
+        rope_adjustments=dict(
+            factor=8.0,
+            high_freq_factor=4.0,
+            low_freq_factor=1.0,
+            original_max_position_embeddings=8192,
+            rope_type="llama3",
+            type="llama3"
+        ),
+    ),
+    # https://huggingface.co/swiss-ai/Apertus-70B-Instruct-2509/blob/main/config.json
+    dict(
+        name="Apertus-70B-Instruct-2509",
+        hf_config=dict(org="swiss-ai", name="Apertus-70B-Instruct-2509"),
+        block_size=65536,
+        vocab_size=131072,
+        padded_vocab_size=131072,
+        n_layer=80,
+        n_head=64,
+        n_embd=8192,
+        n_query_groups=8,
+        rotary_percentage=1.0,
+        parallel_residual=False,
+        bias=False,
+        norm_class_name="RMSNorm",
+        mlp_class_name="ApertusMLP",
+        intermediate_size=43008,
+        norm_eps=1e-5,
+        rope_base=12000000,
+        norm_qk=True,
+        rope_adjustments=dict(
+            factor=8.0,
+            high_freq_factor=4.0,
+            low_freq_factor=1.0,
+            original_max_position_embeddings=8192,
+            rope_type="llama3",
+            type="llama3"
+        ),
+    ),
+]
+configs.extend(apertus)
 
 name_to_config = {config["name"]: config for config in configs}

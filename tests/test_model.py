@@ -1731,6 +1731,44 @@ def test_rope_cos_sin_shapes_if_rope_n_elem_is_odd(rotary_percentage, final_dim)
     assert model.sin.shape == required_shape
 
 
+@torch.inference_mode()
+@pytest.mark.parametrize("model_name", ("Apertus-8B-2509", "Apertus-8B-Instruct-2509"))
+@pytest.mark.parametrize(
+    ("device", "dtype"),
+    [
+        (torch.device("cpu"), torch.float32),
+        pytest.param(
+            torch.device("cuda"),
+            torch.float16,
+            marks=[
+                pytest.mark.xfail(raises=AssertionError, strict=False),
+                _RunIf(min_cuda_gpus=1),
+            ],
+        ),
+    ],
+)
+def test_against_original_apertus(model_name, device, dtype):
+    torch.set_default_dtype(dtype)
+
+    ours_config = Config.from_name(
+        model_name,
+        padded_vocab_size=10000,
+        n_layer=2,
+        n_head=8,
+        n_embd=32,
+        n_query_groups=2,
+        intermediate_size=86,
+    )
+
+    # Simple test to verify model creation and forward pass
+    T = 5
+    ours_model = GPT(ours_config).to(device)
+    x = torch.randint(low=0, high=ours_config.padded_vocab_size, size=(T,), device=device).unsqueeze(0)
+    assert x.size(1) == T
+    ours_y = ours_model(x)
+    assert ours_y.shape == (1, T, ours_config.padded_vocab_size)
+
+
 def test_forward_with_without_input_pos_maxp1():
     batch_size = 3
     config = Config(

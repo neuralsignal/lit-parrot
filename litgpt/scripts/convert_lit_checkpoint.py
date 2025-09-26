@@ -565,7 +565,10 @@ def convert_lit_checkpoint(checkpoint_dir: Path, output_dir: Path) -> None:
         copy_fn = partial(copy_weights_olmo2, config)
     elif config.name.lower().startswith("qwen3"):
         copy_fn = partial(copy_weights_qwen_3, config)
-    elif config.mlp_class_name in ("LLaMAMLP", "GemmaMLP", "LLaMAMoE"):
+    elif config.name.lower().startswith("apertus"):
+        untie_weights = "Gemma" in config.name
+        copy_fn = partial(copy_weights_llama, config, untie_weights=untie_weights)
+    elif config.mlp_class_name in ("LLaMAMLP", "GemmaMLP", "LLaMAMoE", "ApertusMLP"):
         untie_weights = "Gemma" in config.name
         copy_fn = partial(copy_weights_llama, config, untie_weights=untie_weights)
     else:

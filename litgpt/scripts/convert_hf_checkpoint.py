@@ -817,7 +817,11 @@ def convert_hf_checkpoint(
         # holder to reconstitute the split q, k, v
         qkv_weights = {}
         copy_fn = partial(copy_weights_qwen_3, config, qkv_weights)
-    elif config.mlp_class_name in ("LLaMAMLP", "GemmaMLP", "LLaMAMoE"):
+    elif model_name.lower().startswith("apertus"):
+        # holder to reconstitute the split q, k, v
+        qkv_weights = {}
+        copy_fn = partial(copy_weights_hf_llama, config, qkv_weights)
+    elif config.mlp_class_name in ("LLaMAMLP", "GemmaMLP", "LLaMAMoE", "ApertusMLP"):
         # holder to reconstitute the split q, k, v
         qkv_weights = {}
         copy_fn = partial(copy_weights_hf_llama, config, qkv_weights)

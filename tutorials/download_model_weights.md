@@ -78,6 +78,10 @@ The output is shown below:
 allenai/OLMo-1B-hf
 allenai/OLMo-7B-hf
 allenai/OLMo-7B-Instruct-hf
+swiss-ai/Apertus-8B-2509
+swiss-ai/Apertus-8B-Instruct-2509
+swiss-ai/Apertus-70B-2509
+swiss-ai/Apertus-70B-Instruct-2509
 bsc-lt/salamandra-2b
 bsc-lt/salamandra-2b-instruct
 bsc-lt/salamandra-7b
