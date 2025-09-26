@@ -172,7 +172,7 @@ def copy_weights_hf_llama(
                 "model.layers.{}.block_sparse_moe.experts.{}.w2.weight": "transformer.h.{}.mlp.experts.{}.proj.weight",
             }
         )
-    elif config.mlp_class_name in ("LLaMAMLP", "GemmaMLP"):
+    elif config.mlp_class_name in ("LLaMAMLP", "GemmaMLP", "ApertusMLP"):
         weight_map.update(
             {
                 "model.layers.{}.mlp.gate_proj.weight": "transformer.h.{}.mlp.fc_1.weight",

@@ -127,7 +127,7 @@ def copy_weights_llama(
                 "transformer.h.{}.mlp.experts.{}.proj.weight": "model.layers.{}.block_sparse_moe.experts.{}.w2.weight",
             }
         )
-    elif config.mlp_class_name in ("LLaMAMLP", "GemmaMLP"):
+    elif config.mlp_class_name in ("LLaMAMLP", "GemmaMLP", "ApertusMLP"):
         weight_map.update(
             {
                 "transformer.h.{}.mlp.fc_1.weight": "model.layers.{}.mlp.gate_proj.weight",
@@ -412,7 +412,7 @@ def copy_weights_olmo2(
         "transformer.ln_f.bias": "model.norm.bias",
         "lm_head.weight": "lm_head.weight",
     }
-    if config.mlp_class_name in ("LLaMAMLP", "GemmaMLP"):
+    if config.mlp_class_name in ("LLaMAMLP", "GemmaMLP", "ApertusMLP"):
         weight_map.update(
             {
                 "transformer.h.{}.mlp.fc_1.weight": "model.layers.{}.mlp.gate_proj.weight",
